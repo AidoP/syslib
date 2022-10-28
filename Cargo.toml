@@ -1,0 +1,16 @@
+[package]
+name = "syslib"
+version = "0.0.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[example]]
+name = "hello_world"
+
+[features]
+default = ["std"]
+std = []
+
+[dependencies]
+syslib-macro = { path = "syslib-macro" }
