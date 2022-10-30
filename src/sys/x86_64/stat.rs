@@ -7,8 +7,8 @@ impl Device {
         let minor = minor as u64;
         Self(
             (major << 8) |
-            ((minor & 0xFFFFFF00) << 32) |
-            ((minor & 0x000000FF))
+            ((minor & 0xFFFF_FF00) << 32) |
+            (minor & 0x0000_00FF)
         )
     }
     pub fn major(&self) -> u32 {
@@ -16,8 +16,8 @@ impl Device {
     }
     pub fn minor(&self) -> u32 {
         (
-            ((self.0 & 0xFFFFFF00_0000000) >> 32) |
-            self.0 & 0x00000000_000000FF
+            ((self.0 & 0xFFFF_FF00_0000_0000) >> 32) |
+            self.0 & 0x0000_0000_0000_00FF
         ) as u32
     }
 }

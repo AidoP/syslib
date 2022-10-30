@@ -1,4 +1,10 @@
-use core::arch::asm;
+use core::{arch::asm, marker::PhantomData};
+use crate::{enumeration, sock::{self, Ancillary}};
+
+pub mod epoll;
+
+mod fcntl;
+pub use fcntl::Fcntl;
 
 mod stat;
 pub use stat::{Device, Stat};
@@ -90,44 +96,274 @@ macro_rules! syscall {
     };
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-#[repr(transparent)]
-pub struct Error(u32);
+enumeration!{
+    pub struct Error(u32) {
+        #["Operation not permitted"]
+        EPERM = 1,
+        #["No such file or directory"]
+        ENOENT = 2,
+        #["No such process"]
+        ESRCH = 3,
+        #["Interrupted system call"]
+        EINTR = 4,
+        #["I/O error"]
+        EIO = 5,
+        #["No such device or address"]
+        ENXIO = 6,
+        #["Argument list too long"]
+        E2BIG = 7,
+        #["Exec format error"]
+        ENOEXEC = 8,
+        #["Bad file number"]
+        EBADF = 9,
+        #["No child processes"]
+        ECHILD = 10,
+        #["Try again"]
+        EAGAIN = 11,
+        #["Out of memory"]
+        ENOMEM = 12,
+        #["Permission denied"]
+        EACCES = 13,
+        #["Bad address"]
+        EFAULT = 14,
+        #["Block device required"]
+        ENOTBLK = 15,
+        #["Device or resource busy"]
+        EBUSY = 16,
+        #["File exists"]
+        EEXIST = 17,
+        #["Cross-device link"]
+        EXDEV = 18,
+        #["No such device"]
+        ENODEV = 19,
+        #["Not a directory"]
+        ENOTDIR = 20,
+        #["Is a directory"]
+        EISDIR = 21,
+        #["Invalid argument"]
+        EINVAL = 22,
+        #["File table overflow"]
+        ENFILE = 23,
+        #["Too many open files"]
+        EMFILE = 24,
+        #["Not a typewriter"]
+        ENOTTY = 25,
+        #["Text file busy"]
+        ETXTBSY = 26,
+        #["File too large"]
+        EFBIG = 27,
+        #["No space left on device"]
+        ENOSPC = 28,
+        #["Illegal seek"]
+        ESPIPE = 29,
+        #["Read-only file system"]
+        EROFS = 30,
+        #["Too many links"]
+        EMLINK = 31,
+        #["Broken pipe"]
+        EPIPE = 32,
+        #["Math argument out of domain of func"]
+        EDOM = 33,
+        #["Math result not representable"]
+        ERANGE = 34,
+        #["Resource deadlock would occur"]
+        EDEADLK = 35,
+        #["File name too long"]
+        ENAMETOOLONG = 36,
+        #["No record locks available"]
+        ENOLCK = 37,
+        #["Invalid system call number"]
+        ENOSYS = 38,
+        #["Directory not empty"]
+        ENOTEMPTY = 39,
+        #["Too many symbolic links encountered"]
+        ELOOP = 40,
+        #["No message of desired type"]
+        ENOMSG = 42,
+        #["Identifier removed"]
+        EIDRM = 43,
+        #["Channel number out of range"]
+        ECHRNG = 44,
+        #["Level 2 not synchronized"]
+        EL2NSYNC = 45,
+        #["Level 3 halted"]
+        EL3HLT = 46,
+        #["Level 3 reset"]
+        EL3RST = 47,
+        #["Link number out of range"]
+        ELNRNG = 48,
+        #["Protocol driver not attached"]
+        EUNATCH = 49,
+        #["No CSI structure available"]
+        ENOCSI = 50,
+        #["Level 2 halted"]
+        EL2HLT = 51,
+        #["Invalid exchange"]
+        EBADE = 52,
+        #["Invalid request descriptor"]
+        EBADR = 53,
+        #["Exchange full"]
+        EXFULL = 54,
+        #["No anode"]
+        ENOANO = 55,
+        #["Invalid request code"]
+        EBADRQC = 56,
+        #["Invalid slot"]
+        EBADSLT = 57,
+        #["Bad font file format"]
+        EBFONT = 59,
+        #["Device not a stream"]
+        ENOSTR = 60,
+        #["No data available"]
+        ENODATA = 61,
+        #["Timer expired"]
+        ETIME = 62,
+        #["Out of streams resources"]
+        ENOSR = 63,
+        #["Machine is not on the network"]
+        ENONET = 64,
+        #["Package not installed"]
+        ENOPKG = 65,
+        #["Object is remote"]
+        EREMOTE = 66,
+        #["Link has been severed"]
+        ENOLINK = 67,
+        #["Advertise error"]
+        EADV = 68,
+        #["Srmount error"]
+        ESRMNT = 69,
+        #["Communication error on send"]
+        ECOMM = 70,
+        #["Protocol error"]
+        EPROTO = 71,
+        #["Multihop attempted"]
+        EMULTIHOP = 72,
+        #["RFS specific error"]
+        EDOTDOT = 73,
+        #["Not a data message"]
+        EBADMSG = 74,
+        #["Value too large for defined data type"]
+        EOVERFLOW = 75,
+        #["Name not unique on network"]
+        ENOTUNIQ = 76,
+        #["File descriptor in bad state"]
+        EBADFD = 77,
+        #["Remote address changed"]
+        EREMCHG = 78,
+        #["Can not access a needed shared library"]
+        ELIBACC = 79,
+        #["Accessing a corrupted shared library"]
+        ELIBBAD = 80,
+        #[".lib section in a.out corrupted"]
+        ELIBSCN = 81,
+        #["Attempting to link in too many shared libraries"]
+        ELIBMAX = 82,
+        #["Cannot exec a shared library directly"]
+        ELIBEXEC = 83,
+        #["Illegal byte sequence"]
+        EILSEQ = 84,
+        #["Interrupted system call should be restarted"]
+        ERESTART = 85,
+        #["Streams pipe error"]
+        ESTRPIPE = 86,
+        #["Too many users"]
+        EUSERS = 87,
+        #["Socket operation on non-socket"]
+        ENOTSOCK = 88,
+        #["Destination address required"]
+        EDESTADDRREQ = 89,
+        #["Message too long"]
+        EMSGSIZE = 90,
+        #["Protocol wrong type for socket"]
+        EPROTOTYPE = 91,
+        #["Protocol not available"]
+        ENOPROTOOPT = 92,
+        #["Protocol not supported"]
+        EPROTONOSUPPORT = 93,
+        #["Socket type not supported"]
+        ESOCKTNOSUPPORT = 94,
+        #["Operation not supported on transport endpoint"]
+        EOPNOTSUPP = 95,
+        #["Protocol family not supported"]
+        EPFNOSUPPORT = 96,
+        #["Address family not supported by protocol"]
+        EAFNOSUPPORT = 97,
+        #["Address already in use"]
+        EADDRINUSE = 98,
+        #["Cannot assign requested address"]
+        EADDRNOTAVAIL = 99,
+        #["Network is down"]
+        ENETDOWN = 100,
+        #["Network is unreachable"]
+        ENETUNREACH = 101,
+        #["Network dropped connection because of reset"]
+        ENETRESET = 102,
+        #["Software caused connection abort"]
+        ECONNABORTED = 103,
+        #["Connection reset by peer"]
+        ECONNRESET = 104,
+        #["No buffer space available"]
+        ENOBUFS = 105,
+        #["Transport endpoint is already connected"]
+        EISCONN = 106,
+        #["Transport endpoint is not connected"]
+        ENOTCONN = 107,
+        #["Cannot send after transport endpoint shutdown"]
+        ESHUTDOWN = 108,
+        #["Too many references: cannot splice"]
+        ETOOMANYREFS = 109,
+        #["Connection timed out"]
+        ETIMEDOUT = 110,
+        #["Connection refused"]
+        ECONNREFUSED = 111,
+        #["Host is down"]
+        EHOSTDOWN = 112,
+        #["No route to host"]
+        EHOSTUNREACH = 113,
+        #["Operation already in progress"]
+        EALREADY = 114,
+        #["Operation now in progress"]
+        EINPROGRESS = 115,
+        #["Stale file handle"]
+        ESTALE = 116,
+        #["Structure needs cleaning"]
+        EUCLEAN = 117,
+        #["Not a XENIX named type file"]
+        ENOTNAM = 118,
+        #["No XENIX semaphores available"]
+        ENAVAIL = 119,
+        #["Is a named type file"]
+        EISNAM = 120,
+        #["Remote I/O error"]
+        EREMOTEIO = 121,
+        #["Quota exceeded"]
+        EDQUOT = 122,
+        #["No medium found"]
+        ENOMEDIUM = 123,
+        #["Wrong medium type"]
+        EMEDIUMTYPE = 124,
+        #["Operation Canceled"]
+        ECANCELED = 125,
+        #["Required key not available"]
+        ENOKEY = 126,
+        #["Key has expired"]
+        EKEYEXPIRED = 127,
+        #["Key has been revoked"]
+        EKEYREVOKED = 128,
+        #["Key was rejected by service"]
+        EKEYREJECTED = 129,
+        #["Owner died"]
+        EOWNERDEAD = 130,
+        #["State not recoverable"]
+        ENOTRECOVERABLE = 131,
+        #["Operation not possible due to RF-kill"]
+        ERFKILL = 132,
+        #["Memory page has hardware error"]
+        EHWPOISON = 133
+    }
+}
+
 impl Error {
-    pub const EPERM: Self = Self(1);
-    pub const ENOENT: Self = Self(2);
-    pub const ESRCH: Self = Self(3);
-    pub const EINTR: Self = Self(4);
-    pub const EIO: Self = Self(5);
-    pub const ENXIO: Self = Self(6);
-    pub const E2BIG: Self = Self(7);
-    pub const ENOEXEC: Self = Self(8);
-    pub const EBADF: Self = Self(9);
-    pub const ECHILD: Self = Self(10);
-    pub const EAGAIN: Self = Self(11);
-    pub const ENOMEM: Self = Self(12);
-    pub const EACCES: Self = Self(13);
-    pub const EFAULT: Self = Self(14);
-    pub const ENOTBLK: Self = Self(15);
-    pub const EBUSY: Self = Self(16);
-    pub const EEXIST: Self = Self(17);
-    pub const EXDEV: Self = Self(18);
-    pub const ENODEV: Self = Self(19);
-    pub const ENOTDIR: Self = Self(20);
-    pub const EISDIR: Self = Self(21);
-    pub const EINVAL: Self = Self(22);
-    pub const ENFILE: Self = Self(23);
-    pub const EMFILE: Self = Self(24);
-    pub const ENOTTY: Self = Self(25);
-    pub const ETXTBSY: Self = Self(26);
-    pub const EFBIG: Self = Self(27);
-    pub const ENOSPC: Self = Self(28);
-    pub const ESPIPE: Self = Self(29);
-    pub const EROFS: Self = Self(30);
-    pub const EMLINK: Self = Self(31);
-    pub const EPIPE: Self = Self(32);
-    pub const EDOM: Self = Self(33);
-    pub const ERANGE: Self = Self(34);
     #[inline]
     pub fn maybe(maybe: isize) -> Result<(), Error> {
         if maybe < 0 {
@@ -161,126 +397,222 @@ impl Error {
         }
     }
 }
-impl core::fmt::Debug for Error {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let error = self.0;
-        match *self {
-            Self::EPERM => write!(f, "EPERM({error})"),
-            Self::ENOENT => write!(f, "ENOENT({error})"),
-            Self::ESRCH => write!(f, "ESRCH({error})"),
-            Self::EINTR => write!(f, "EINTR({error})"),
-            Self::EIO => write!(f, "EIO({error})"),
-            Self::ENXIO => write!(f, "ENXIO({error})"),
-            Self::E2BIG => write!(f, "E2BIG({error})"),
-            Self::ENOEXEC => write!(f, "ENOEXEC({error})"),
-            Self::EBADF => write!(f, "EBADF({error})"),
-            Self::ECHILD => write!(f, "ECHILD({error})"),
-            Self::EAGAIN => write!(f, "EAGAIN({error})"),
-            Self::ENOMEM => write!(f, "ENOMEM({error})"),
-            Self::EACCES => write!(f, "EACCES({error})"),
-            Self::EFAULT => write!(f, "EFAULT({error})"),
-            Self::ENOTBLK => write!(f, "ENOTBLK({error})"),
-            Self::EBUSY => write!(f, "EBUSY({error})"),
-            Self::EEXIST => write!(f, "EEXIST({error})"),
-            Self::EXDEV => write!(f, "EXDEV({error})"),
-            Self::ENODEV => write!(f, "ENODEV({error})"),
-            Self::ENOTDIR => write!(f, "ENOTDIR({error})"),
-            Self::EISDIR => write!(f, "EISDIR({error})"),
-            Self::EINVAL => write!(f, "EINVAL({error})"),
-            Self::ENFILE => write!(f, "ENFILE({error})"),
-            Self::EMFILE => write!(f, "EMFILE({error})"),
-            Self::ENOTTY => write!(f, "ENOTTY({error})"),
-            Self::ETXTBSY => write!(f, "ETXTBSY({error})"),
-            Self::EFBIG => write!(f, "EFBIG({error})"),
-            Self::ENOSPC => write!(f, "ENOSPC({error})"),
-            Self::ESPIPE => write!(f, "ESPIPE({error})"),
-            Self::EROFS => write!(f, "EROFS({error})"),
-            Self::EMLINK => write!(f, "EMLINK({error})"),
-            Self::EPIPE => write!(f, "EPIPE({error})"),
-            Self::EDOM => write!(f, "EDOM({error})"),
-            Self::ERANGE => write!(f, "ERANGE({error})"),
-            _ => write!(f, "UNKNOWN({error})"),
-        }
+
+pub trait FileDescriptor {
+    fn raw(&self) -> u32;
+}
+
+/// An un-owned file descriptor.
+/// 
+/// The owned equivalent is `File`. 
+/// The lifetime of a Fd is "loose" as it is safe to close an in-use `File`,
+/// although generally undesirable.
+#[derive(Debug, Clone, Copy)]
+#[repr(transparent)]
+pub struct Fd<'a>(u32, PhantomData<&'a u32>);
+impl<'a> Fd<'a> {
+    /// Create an unowned file descriptor from a raw file descriptor.
+    pub fn from_raw(fd: u32) -> Self {
+        Self(fd, PhantomData)
+    }
+    /// Make this file descriptor owned.
+    /// 
+    /// If this file descriptor is already owned this may lead to accidental double-closes.
+    pub fn owned(self) -> File {
+        File(self.0)
+    }
+    /// Extend the lifetime of the file descriptor to `'static`
+    pub fn extend(self) -> Fd<'static> {
+        Fd(self.0, PhantomData)
     }
 }
-impl core::fmt::Display for Error {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match *self {
-            Self::EPERM => f.write_str("Operation not permitted"),
-            Self::ENOENT => f.write_str("No such file or directory"),
-            Self::ESRCH => f.write_str("No such process"),
-            Self::EINTR => f.write_str("Interrupted system call"),
-            Self::EIO => f.write_str("I/O error"),
-            Self::ENXIO => f.write_str("No such device or address"),
-            Self::E2BIG => f.write_str("Argument list too long"),
-            Self::ENOEXEC => f.write_str("Exec format error"),
-            Self::EBADF => f.write_str("Bad file number"),
-            Self::ECHILD => f.write_str("No child processes"),
-            Self::EAGAIN => f.write_str("Try again"),
-            Self::ENOMEM => f.write_str("Out of memory"),
-            Self::EACCES => f.write_str("Permission denied"),
-            Self::EFAULT => f.write_str("Bad address"),
-            Self::ENOTBLK => f.write_str("Block device required"),
-            Self::EBUSY => f.write_str("Device or resource busy"),
-            Self::EEXIST => f.write_str("File exists"),
-            Self::EXDEV => f.write_str("Cross-device link"),
-            Self::ENODEV => f.write_str("No such device"),
-            Self::ENOTDIR => f.write_str("Not a directory"),
-            Self::EISDIR => f.write_str("Is a directory"),
-            Self::EINVAL => f.write_str("Invalid argument"),
-            Self::ENFILE => f.write_str("File table overflow"),
-            Self::EMFILE => f.write_str("Too many open files"),
-            Self::ENOTTY => f.write_str("Not a typewriter"),
-            Self::ETXTBSY => f.write_str("Text file busy"),
-            Self::EFBIG => f.write_str("File too large"),
-            Self::ENOSPC => f.write_str("No space left on device"),
-            Self::ESPIPE => f.write_str("Illegal seek"),
-            Self::EROFS => f.write_str("Read-only file system"),
-            Self::EMLINK => f.write_str("Too many links"),
-            Self::EPIPE => f.write_str("Broken pipe"),
-            Self::EDOM => f.write_str("Math argument out of domain of func"),
-            Self::ERANGE => f.write_str("Math result not representable"),
-            Self(error) => write!(f, "Unknown, error {error}")
-        }
+impl Fd<'static> {
+    #[allow(non_upper_case_globals)]
+    pub const stdin: &'static Self = &Self(0, PhantomData);
+    #[allow(non_upper_case_globals)]
+    pub const stdout: &'static Self = &Self(1, PhantomData);
+    #[allow(non_upper_case_globals)]
+    pub const stderr: &'static Self = &Self(2, PhantomData);
+}
+impl<'a> FileDescriptor for Fd<'a> {
+    #[inline(always)]
+    fn raw(&self) -> u32 {
+        self.0
     }
 }
 
-#[derive(Debug, Clone, Copy)]
 #[repr(transparent)]
-pub struct Fd(u32);
-impl Fd {
-    #[allow(non_upper_case_globals)]
-    pub const stdin: Self = Self(0);
-    #[allow(non_upper_case_globals)]
-    pub const stdout: Self = Self(1);
-    #[allow(non_upper_case_globals)]
-    pub const stderr: Self = Self(2);
-    #[inline(always)]
-    pub fn raw(self) -> u32 {
-        self.0
+pub struct File(u32);
+impl File {
+    /// Read from the file in to a buffer.
+    /// 
+    /// Returns a slice from the buffer that was written.
+    #[inline]
+    pub fn read<'a>(&self, buf: &'a mut [u8]) -> Result<&'a [u8], Error> {
+        read(self, buf)
     }
-    #[inline(always)]
-    pub fn from_raw(fd: u32) -> Self {
-        Self(fd)
+    /// Write the buffer to the file.
+    /// 
+    /// Returns the number of bytes written.
+    #[inline]
+    pub fn write(&self, buf: &[u8]) -> Result<usize, Error> {
+        write(self, buf)
+    }
+    /// Get the un-owned, raw file descriptor
+    pub fn fd<'a>(&'a self) -> Fd<'a> {
+        Fd(self.0, PhantomData)
     }
 }
-impl TryFrom<isize> for Fd {
+impl TryFrom<isize> for File {
     type Error = Error;
-    fn try_from(fd: isize) -> Result<Self, Self::Error> {
-        if fd < 0 {
-            Err(Error(-fd as u32))
+    fn try_from(maybe: isize) -> Result<Self, Self::Error> {
+        if maybe < 0 {
+            Err(Error(-maybe as u32))
         } else {
-            Ok(Fd(fd as u32))
+            Ok(Self(maybe as u32))
+        }
+    }
+}
+impl FileDescriptor for File {
+    #[inline(always)]
+    fn raw(&self) -> u32 {
+        self.0
+    }
+}
+impl<'a> AsRef<Fd<'a>> for File {
+    fn as_ref(&self) -> &'a Fd<'a> {
+        // Safety: File and Fd are both `repr(transparent)` over u32
+        unsafe { core::mem::transmute(self) }
+    }
+}
+impl Drop for File {
+    fn drop(&mut self) {
+        let _ = close(self);
+    }
+}
+
+#[derive(Debug)]
+#[repr(transparent)]
+pub struct Socket(u32);
+impl Socket {
+    /// Get the un-owned, raw file descriptor
+    pub fn fd<'a>(&'a self) -> Fd<'a> {
+        Fd(self.0, PhantomData)
+    }
+}
+impl TryFrom<isize> for Socket {
+    type Error = Error;
+    fn try_from(maybe: isize) -> Result<Self, Self::Error> {
+        if maybe < 0 {
+            Err(Error(-maybe as u32))
+        } else {
+            Ok(Self(maybe as u32))
+        }
+    }
+}
+impl FileDescriptor for Socket {
+    #[inline(always)]
+    fn raw(&self) -> u32 {
+        self.0
+    }
+}
+impl<'a> AsRef<Fd<'a>> for Socket {
+    fn as_ref(&self) -> &'a Fd<'a> {
+        // Safety: Socket and Fd are both `repr(transparent)` over u32
+        unsafe { core::mem::transmute(self) }
+    }
+}
+impl Drop for Socket {
+    fn drop(&mut self) {
+        let _ = close(self);
+    }
+}
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct IoVec<'a> {
+    buffer: *const u8,
+    buffer_len: usize,
+    _marker: core::marker::PhantomData<&'a [u8]>
+}
+impl<'a> IoVec<'a> {
+    /// Construct a new `IoVec` from a slice.
+    #[inline(always)]
+    pub fn new(buffer: &[u8]) -> Self {
+        Self {
+            buffer: buffer.as_ptr(),
+            buffer_len: buffer.len(),
+            _marker: core::marker::PhantomData
+        }
+    }
+    /// Construct a new `IoVec` that may point to uninitialised data.
+    /// # Safety
+    /// `buffer` must be readable for `buffer_len` bytes.
+    #[inline(always)]
+    pub unsafe fn maybe_uninit(buffer: *const u8, buffer_len: usize) -> Self {
+        Self {
+            buffer,
+            buffer_len,
+            _marker: core::marker::PhantomData
+        }
+    }
+}
+impl<'a> From<&'a [u8]> for IoVec<'a> {
+    fn from(buffer: &'a [u8]) -> Self {
+        Self {
+            buffer: buffer.as_ptr(),
+            buffer_len: buffer.len(),
+            _marker: core::marker::PhantomData
+        }
+    }
+}
+#[derive(Debug)]
+#[repr(C)]
+pub struct IoVecMut<'a> {
+    buffer: *mut u8,
+    buffer_len: usize,
+    _marker: core::marker::PhantomData<&'a [u8]>
+}
+impl<'a> IoVecMut<'a> {
+    /// Construct a new `IoVecMut` from a slice.
+    #[inline(always)]
+    pub fn new(buffer: &mut [u8]) -> Self {
+        Self {
+            buffer: buffer.as_mut_ptr(),
+            buffer_len: buffer.len(),
+            _marker: core::marker::PhantomData
+        }
+    }
+    /// Construct a new `IoVecMut` that may point to uninitialised data.
+    /// # Safety
+    /// `buffer` must be writable for `buffer_len` bytes.
+    #[inline(always)]
+    pub unsafe fn maybe_uninit(buffer: *mut u8, buffer_len: usize) -> Self {
+        Self {
+            buffer,
+            buffer_len,
+            _marker: core::marker::PhantomData
+        }
+    }
+}
+impl<'a> From<&'a mut [u8]> for IoVecMut<'a> {
+    fn from(buffer: &'a mut [u8]) -> Self {
+        Self {
+            buffer: buffer.as_mut_ptr(),
+            buffer_len: buffer.len(),
+            _marker: core::marker::PhantomData
         }
     }
 }
 
 /// Read in the next available bytes from a file.
 /// The buffer may be uninitialised.
+/// 
 /// # Safety
-/// `buffer` must be writable for `buffer_len` bytes.
+/// `buffer` must be readable and writable for `buffer_len` bytes.
 /// The lifetime assigned to the returned slice must not exceed that of buffer.
-pub unsafe fn read_uninit<'a>(fd: Fd, buffer: *mut u8, buffer_len: usize) -> Result<&'a [u8], Error> {
+#[inline]
+pub unsafe fn read_uninit<'a, F: FileDescriptor>(fd: &F, buffer: *mut u8, buffer_len: usize) -> Result<&'a [u8], Error> {
     let count;
     syscall!{
         0x00(fd.raw(), buffer, buffer_len) -> count 
@@ -289,12 +621,14 @@ pub unsafe fn read_uninit<'a>(fd: Fd, buffer: *mut u8, buffer_len: usize) -> Res
 }
 /// Read in the next available bytes from a file.
 /// The buffer may not be filled, extra bytes are left unmodified.
-pub fn read(fd: Fd, buffer: &mut [u8]) -> Result<&[u8], Error> {
+#[inline]
+pub fn read<'a, F: FileDescriptor>(fd: &F, buffer: &'a mut [u8]) -> Result<&'a [u8], Error> {
     unsafe { read_uninit(fd, buffer.as_mut_ptr(), buffer.len()) }
 }
 /// Write a slice of bytes to a file.
 /// The number of bytes successfully written is returned.
-pub fn write(fd: Fd, buffer: &[u8]) -> Result<usize, Error> {
+#[inline]
+pub fn write<'a, F: FileDescriptor>(fd: &F, buffer: &[u8]) -> Result<usize, Error> {
     let count;
     unsafe {
         syscall!{
@@ -308,14 +642,14 @@ pub mod open {
     use super::Error;
     crate::c_flags!{
         pub Flags(u32) {
-            ReadOnly = 0b00,
-            WriteOnly = 0b01,
-            ReadWrite = 0b10,
-            Create = 0o100,
-            Append = 0o2000,
-            NonBlocking = 0o4000,
-            CloseOnExec = 0o2000000,
-            NoAccessTime = 0o1000000
+            READ_ONLY = 0b00,
+            WRITE_ONLY = 0b01,
+            READ_WRITE = 0b10,
+            CREATE = 0o100,
+            APPEND = 0o2000,
+            NON_BLOCKING = 0o4000,
+            CLOSE_ON_EXEC = 0o2000000,
+            NO_ACCESS_TIME = 0o1000000
         } _ => Err(Error::EINVAL)
     }
     #[derive(Clone, Copy, PartialEq, Eq)]
@@ -432,21 +766,28 @@ pub mod open {
         }
     }
 }
-pub unsafe fn open_unsafe(path: *const u8, open::Flags(flags): open::Flags, open::Mode(mode): open::Mode) -> Result<Fd, Error> {
+/// Open a file from the file system.
+/// 
+/// # Safety
+/// `path` must be null-terminated.
+#[inline]
+pub unsafe fn open_unsafe(path: *const u8, open::Flags(flags): open::Flags, open::Mode(mode): open::Mode) -> Result<File, Error> {
     let fd: isize;
     syscall!{
         0x02(path, flags, mode) -> fd
     }
     fd.try_into()
 }
+#[inline]
 #[cfg(feature = "std")]
-pub fn open<P: AsRef<std::path::Path>>(path: P, flags: open::Flags, mode: open::Mode) -> Result<Fd, Error> {
+pub fn open<P: AsRef<std::path::Path>>(path: P, flags: open::Flags, mode: open::Mode) -> Result<File, Error> {
     use std::os::unix::prelude::OsStrExt;
     let path = std::ffi::CString::new(path.as_ref().as_os_str().as_bytes()).map_err(|_| Error::EINVAL)?;
     unsafe { open_unsafe(path.as_ptr() as *const u8, flags, mode) }
 }
 
-pub fn close(fd: Fd) -> Result<(), Error> {
+#[inline]
+pub fn close<F: FileDescriptor>(fd: &F) -> Result<(), Error> {
     let err;
     unsafe {
         syscall!{
@@ -455,6 +796,11 @@ pub fn close(fd: Fd) -> Result<(), Error> {
     }
     Error::maybe(err)
 }
+/// Get information about a file without opening it.
+/// 
+/// # Safety
+/// `path` must be null-terminated.
+#[inline]
 pub unsafe fn stat_unsafe(path: *const u8) -> Result<Stat, Error> {
     let mut stat = core::mem::MaybeUninit::uninit();
     let err;
@@ -464,12 +810,14 @@ pub unsafe fn stat_unsafe(path: *const u8) -> Result<Stat, Error> {
     Error::maybe(err).map(|_| stat.assume_init())
 }
 #[cfg(feature = "std")]
+#[inline]
 pub fn stat<P: AsRef<std::path::Path>>(path: P) -> Result<Stat, Error> {
     use std::os::unix::prelude::OsStrExt;
     let path = std::ffi::CString::new(path.as_ref().as_os_str().as_bytes()).map_err(|_| Error::EINVAL)?;
     unsafe { stat_unsafe(path.as_ptr() as *const u8) }
 }
-pub fn fstat(fd: Fd) -> Result<Stat, Error> {
+#[inline]
+pub fn fstat<F: FileDescriptor>(fd: &F) -> Result<Stat, Error> {
     let mut stat = core::mem::MaybeUninit::uninit();
     let err;
     unsafe {
@@ -479,6 +827,11 @@ pub fn fstat(fd: Fd) -> Result<Stat, Error> {
         Error::maybe(err).map(|_| stat.assume_init())
     }
 }
+/// Get information about a file without opening it and without following symlinks.
+/// 
+/// # Safety
+/// `path` must be null-terminated.
+#[inline]
 pub unsafe fn lstat_unsafe(path: *const u8) -> Result<Stat, Error> {
     let mut stat = core::mem::MaybeUninit::uninit();
     let err;
@@ -488,6 +841,7 @@ pub unsafe fn lstat_unsafe(path: *const u8) -> Result<Stat, Error> {
     Error::maybe(err).map(|_| stat.assume_init())
 }
 #[cfg(feature = "std")]
+#[inline]
 pub fn lstat<P: AsRef<std::path::Path>>(path: P) -> Result<Stat, Error> {
     use std::os::unix::prelude::OsStrExt;
     let path = std::ffi::CString::new(path.as_ref().as_os_str().as_bytes()).map_err(|_| Error::EINVAL)?;
@@ -499,6 +853,7 @@ pub fn lstat<P: AsRef<std::path::Path>>(path: P) -> Result<Stat, Error> {
 /// # Safety
 /// Though creating a memory mapping can be considered safe, use of the memory mapping is likely quite unsafe.
 /// Extra care must be taken when using a shared memory mapping.
+#[inline]
 pub fn mmap(address: usize, length: usize, protection: usize, flags: usize, fd: Fd, offset: usize) -> Result<*mut core::ffi::c_void, Error> {
     let ptr;
     unsafe {
@@ -514,6 +869,7 @@ pub fn mmap(address: usize, length: usize, protection: usize, flags: usize, fd: 
 /// 
 /// # Safety
 /// Changing the memory protection for a region pointed to by a reference is undefined behaviour.
+#[inline]
 pub unsafe fn mprotect(address: *mut core::ffi::c_void, length: usize, protection: usize) -> Result<(), Error> {
     let err;
     syscall!{
@@ -525,6 +881,7 @@ pub unsafe fn mprotect(address: *mut core::ffi::c_void, length: usize, protectio
 /// 
 /// # Safety
 /// Unmapping memory that is in use or is pointed to by a reference is undefined behaviour.
+#[inline]
 pub unsafe fn munmap(address: *mut core::ffi::c_void, length: usize) -> Result<(), Error> {
     let err;
     syscall!{
@@ -538,7 +895,8 @@ pub unsafe fn munmap(address: *mut core::ffi::c_void, length: usize) -> Result<(
 /// # Safety
 /// - `arg` must be appropriate for the given command and device of the file descriptor.
 /// - `*mut T` must be a thin pointer.
-pub unsafe fn ioctl<T>(fd: Fd, cmd: u32, arg: *mut T) -> Result<(), Error> {
+#[inline]
+pub unsafe fn ioctl<T, F: FileDescriptor>(fd: &F, cmd: u32, arg: *mut T) -> Result<(), Error> {
     let err;
     syscall!{
         16(fd.raw(), cmd, arg) -> err
@@ -546,9 +904,152 @@ pub unsafe fn ioctl<T>(fd: Fd, cmd: u32, arg: *mut T) -> Result<(), Error> {
     Error::maybe(err)
 }
 
+/// Vectorized read. The same operation as read but specifying a set of destination buffers.
+/// The buffers may be uninitialised.
+#[inline]
+pub fn readv<F: FileDescriptor>(fd: &F, iov: &[IoVec]) -> Result<usize, Error> {
+    // Safety: IoVec can only be constructed with potentially invalid values through an unsafe function.
+    let count;
+    unsafe {
+        syscall!{
+            19(fd.raw(), iov.as_ptr(), iov.len()) -> count
+        }
+    }
+    Error::maybe_usize(count)
+}
+
+/// Create a socket file descriptor.
+#[inline]
+pub fn socket(domain: sock::Domain, ty: sock::Type, protocol: sock::Protocol) -> Result<Socket, Error> {
+    let fd: isize;
+    let domain: u32 = domain.into();
+    let ty: u32 = ty.into();
+    let protocol: u32 = protocol.into();
+    unsafe {
+        syscall!{
+            41(domain, ty, protocol) -> fd
+        }
+    }
+    fd.try_into()
+}
+/// Initiate a connection on a socket.
+#[inline]
+pub fn connect<F: FileDescriptor>(socket: &F, address: sock::Address) -> Result<(), Error> {
+    let error;
+    unsafe {
+        syscall!{
+            42(socket.raw(), address.0.as_ptr(), address.0.len()) -> error
+        }
+    }
+    Error::maybe(error)
+}
+/// Accept a connection on a socket.
+#[inline]
+pub fn accept<F: FileDescriptor>(socket: &F) -> Result<Socket, Error> {
+    let fd: isize;
+    unsafe {
+        syscall!{
+            43(socket.raw(), core::ptr::null_mut::<u8>(), core::ptr::null_mut::<u32>()) -> fd
+        }
+    }
+    fd.try_into()
+}
+
+/// Send a message to a socket.
+pub fn sendmsg<T, const N: usize, F: FileDescriptor>(socket: &F, iov: &[IoVec], ancillary: Option<&Ancillary<T, N>>, flags: sock::Flags) -> Result<usize, Error> {
+    #[repr(C)]
+    struct MessageHeader<'a, T, const N: usize> {
+        address: *const u8,
+        address_len: u32,
+        iov: *const IoVec<'a>,
+        iov_len: usize,
+        ancillary: *const Ancillary<T, N>,
+        ancillary_len: usize,
+        flags: u32,
+    }
+    let msg = MessageHeader {
+        // TODO: sockaddr
+        address: std::ptr::null(),
+        address_len: 0,
+        iov: iov.as_ptr(),
+        iov_len: iov.len(),
+        ancillary_len: if ancillary.is_none() { 0 } else { std::mem::size_of::<Ancillary<T, N>>() },
+        ancillary: ancillary.map(|a| a as *const _).unwrap_or(std::ptr::null()),
+        flags: 0
+    };
+    // Safety: IoVec can only be constructed with potentially invalid values through an unsafe function.
+    let count;
+    let flags: u32 = flags.into();
+    unsafe {
+        syscall!{
+            46(socket.raw(), &msg, flags) -> count
+        }
+    }
+    Error::maybe_usize(count)
+}
+/// Recieve a message from a socket.
+/// 
+/// `flags` is written with the message return flags.
+pub fn recvmsg<T, const N: usize, F: FileDescriptor>(socket: &F, iov: &[IoVecMut], ancillary: Option<&mut Ancillary<T, N>>, flags: sock::Flags) -> Result<usize, Error> {
+    #[repr(C)]
+    struct MessageHeader<'a, T, const N: usize> {
+        address: *mut u8,
+        address_len: u32,
+        iov: *const IoVecMut<'a>,
+        iov_len: usize,
+        ancillary: *mut Ancillary<T, N>,
+        ancillary_len: usize,
+        flags: u32,
+    }
+    let mut msg = MessageHeader {
+        // TODO: sockaddr
+        address: std::ptr::null_mut(),
+        address_len: 0,
+        iov: iov.as_ptr(),
+        iov_len: iov.len(),
+        ancillary_len: if ancillary.is_none() { 0 } else { std::mem::size_of::<Ancillary<T, N>>() },
+        ancillary: ancillary.map(|a| a as *mut _).unwrap_or(std::ptr::null_mut()),
+        flags: 0
+    };
+    // Safety: IoVec can only be constructed with potentially invalid values through an unsafe function.
+    let count;
+    let flags: u32 = flags.into();
+    unsafe {
+        syscall!{
+            47(socket.raw(), &mut msg, flags) -> count
+        }
+    }
+    Error::maybe_usize(count)
+}
+
+/// Bind a name to a socket.
+#[inline]
+pub fn bind<F: FileDescriptor>(socket: &F, address: sock::Address) -> Result<(), Error> {
+    let maybe: isize;
+    unsafe {
+        syscall!{
+            49(socket.raw(), address.0.as_ptr(), address.0.len()) -> maybe
+        }
+    }
+    Error::maybe(maybe)
+}
+
+/// Listen for connections on a socket.
+#[inline]
+pub fn listen<F: FileDescriptor>(socket: &F, backlog: u32) -> Result<(), Error> {
+    let maybe: isize;
+    unsafe {
+        syscall!{
+            50(socket.raw(), backlog) -> maybe
+        }
+    }
+    Error::maybe(maybe)
+}
+
 /// Terminate the process, returning a code to the parent process.
 /// 
 /// Linux will clean up used resources, however, language termination functions such as `Drop` will not be run.
+#[inline]
 pub fn exit(code: i32) -> ! {
     unsafe {
         asm!(
@@ -558,4 +1059,102 @@ pub fn exit(code: i32) -> ! {
             options(noreturn)
         )
     }
+}
+
+/// Manipulate a file descriptor.
+/// 
+/// # Safety
+/// - `arg` must be appropriate for the given command and device of the file descriptor.
+/// - `*mut T` must be a thin pointer.
+#[inline]
+pub fn fcntl<F: FileDescriptor>(fd: &F, cmd: Fcntl) -> Result<u32, Error> {
+    let maybe;
+    unsafe {
+        if let Some(arg) = cmd.arg() {
+            syscall!{
+                72(fd.raw(), cmd.cmd(), arg) -> maybe
+            }
+        } else {
+            syscall!{
+                72(fd.raw(), cmd.cmd()) -> maybe
+            }
+        }
+    }
+    Error::maybe_u32(maybe)
+}
+
+/// Remove an entry from the file system.
+/// 
+/// # Safety
+/// `path` must be null-terminated.
+#[inline]
+pub unsafe fn unlink_unsafe(path: *const u8) -> Result<(), Error> {
+    let maybe: isize;
+    syscall!{
+        87(path) -> maybe
+    }
+    Error::maybe(maybe)
+}
+/// Remove an entry from the file system.
+#[inline]
+#[cfg(feature = "std")]
+pub fn unlink<P: AsRef<std::path::Path>>(path: P) -> Result<(), Error> {
+    use std::os::unix::prelude::OsStrExt;
+    let path = std::ffi::CString::new(path.as_ref().as_os_str().as_bytes()).map_err(|_| Error::EINVAL)?;
+    unsafe { unlink_unsafe(path.as_ptr() as *const u8) }
+}
+
+/// Wait for an entry to enter the epoll ready list.
+#[inline]
+pub fn epoll_wait<'a, E: FileDescriptor>(epoll: &E, events: &'a mut [std::mem::MaybeUninit<epoll::Event>], timeout: u32) -> Result<&'a [epoll::Event], Error> {
+    let maybe: isize;
+    unsafe {
+        syscall!{
+            232(epoll.raw(), events.as_mut_ptr(), events.len(), timeout) -> maybe
+        }
+    }
+    Error::maybe_u32(maybe).map(|count| unsafe { std::mem::transmute(&events[..count as usize]) })
+}
+/// Modify an entry in the epoll wait list.
+#[inline]
+pub fn epoll_ctl<E: FileDescriptor, F: FileDescriptor>(epoll: &E, fd: &F, cmd: epoll::Cntl) -> Result<(), Error> {
+    let maybe: isize;
+    unsafe {
+        syscall!{
+            233(epoll.raw(), cmd.cmd(), fd.raw(), cmd.arg().map(|p| p as *const epoll::Event).unwrap_or(core::ptr::null())) -> maybe
+        }
+    }
+    Error::maybe(maybe)
+}
+/// Open an epoll file descriptor.
+#[inline]
+pub fn epoll_create(flags: epoll::Flags) -> Result<File, Error> {
+    let maybe: isize;
+    let flags : u32 = flags.into();
+    unsafe {
+        syscall!{
+            291(flags) -> maybe
+        }
+    }
+    maybe.try_into()
+}
+
+/// Create an anonymous file.
+/// 
+/// # Safety
+/// `name` must be null-terminated.
+#[inline]
+pub unsafe fn memfd_create_unsafe(name: *const u8, flags: u32) -> Result<File, Error> {
+    let fd: isize;
+    syscall!{
+        319(name, flags) -> fd
+    }
+    fd.try_into()
+}
+/// Create an anonymous file.
+#[inline]
+#[cfg(feature = "std")]
+pub fn memfd_create<P: AsRef<std::path::Path>>(name: &str, flags: u32) -> Result<File, Error> {
+    let name = std::ffi::CString::new(name.as_bytes()).map_err(|_| Error::EINVAL)?;
+    unsafe { memfd_create_unsafe(name.as_ptr() as *const u8, flags) }
 }

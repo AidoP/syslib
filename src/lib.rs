@@ -6,6 +6,7 @@ compile_error!("syslib only supports Linux");
 mod sys;
 pub use sys::*;
 
+pub mod sock;
 
 pub const NUMBER_BITS: u32 = 8;
 pub const NUMBER_SHIFT: u32 = 0;
@@ -72,17 +73,14 @@ macro_rules! c_flags {
         #[repr(transparent)]
         $vis struct $name($vis $ty);
         impl $name {
-            #[allow(non_upper_case_globals)]
-            $vis const None: Self = Self(0);
+            $vis const NONE: Self = Self(0);
             $(
-                #[allow(non_upper_case_globals)]
                 $vis const $item: Self = Self($value);
             )*
-            #[allow(non_upper_case_globals)]
-            $vis const Mask: Self = Self($($value|)* 0);
+            $vis const MASK: Self = Self($($value|)* 0);
             /// Returns true if any of the bits are set
             pub fn any(self, bits: Self) -> bool {
-                self & bits != Self::None
+                self & bits != Self::NONE
             }
             /// Returns true if all of the bits are set
             pub fn all(self, bits: Self) -> bool {
@@ -134,12 +132,13 @@ macro_rules! c_flags {
                 struct Unknown($ty);
                 $(
                     #[derive(Debug)]
+                    #[allow(non_camel_case_types)]
                     struct $item;
                 )*
                 let mut list = f.debug_tuple(stringify!($name));
                 $(if self.all(Self($value)) { list.field(&$item); })*
-                let invalid = *self & !Self::Mask;
-                if invalid != Self::None {
+                let invalid = *self & !Self::MASK;
+                if invalid != Self::NONE {
                     list.field(&Unknown(self.0));
                 }
                 list.finish()
@@ -148,8 +147,8 @@ macro_rules! c_flags {
         impl ::core::convert::TryFrom<$ty> for $name {
             type Error = $crate::Error;
             fn try_from(value: $ty) -> ::core::result::Result<Self, Self::Error> {
-                match Self(value) & !Self::Mask {
-                    Self::None => Ok(Self(value)),
+                match Self(value) & !Self::MASK {
+                    Self::NONE => Ok(Self(value)),
                     $catch => $return
                 }
             }
@@ -160,6 +159,59 @@ macro_rules! c_flags {
             }
         }
     }
+}
+
+#[macro_export]
+macro_rules! enumeration {
+    (
+        $vis:vis struct $ident:ident($ty:ty) {
+            $(
+                #[$display:literal]
+                $item:ident = $value:literal
+            ),*
+        }
+    ) => {
+        #[non_exhaustive]
+        #[derive(::core::clone::Clone, ::core::marker::Copy, ::core::cmp::PartialEq, ::core::cmp::Eq)]
+        #[repr(transparent)]
+        $vis struct $ident($ty);
+        impl $ident {
+            $(pub const $item: Self = Self($value);)*
+        }
+
+        impl ::core::fmt::Debug for $ident {
+            fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                match *self {
+                    $(
+                        Self::$item => ::core::write!(f, "{}({})", ::core::stringify!($item), $value),
+                    )*
+                    e => ::core::write!(f, "UNKNOWN({})", e)
+                }
+            }
+        }
+
+        impl ::core::fmt::Display for $ident {
+            fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                match *self {
+                    $(
+                        Self::$item => f.write_str($display),
+                    )*
+                    _ => f.write_str("Unknown error.")
+                }
+            }
+        }
+
+        impl ::core::convert::Into<$ty> for $ident {
+            fn into(self) -> $ty {
+                self.0
+            }
+        }
+        impl ::core::convert::From<$ty> for $ident {
+            fn from(value: $ty) -> Self {
+                Self(value)
+            }
+        }
+    };
 }
 
 #[cfg(test)]
