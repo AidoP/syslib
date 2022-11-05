@@ -1,4 +1,4 @@
-use crate::{enumeration, c_flags, Error, File, Fd};
+use crate::{c_flags, Fd};
 
 pub const TIMEOUT_INFINITY: u32 = 0xFFFF_FFFF;
 

@@ -52,7 +52,7 @@ enumeration!{
         #["Unspecified socket level"]
         UNSPECIFIED = 0,
         #["The socket itself"]
-        SOCKET = 0xffff
+        SOCKET = 1
     }
 }
 enumeration!{
@@ -107,11 +107,13 @@ impl UnixAddress {
 /// 
 /// Data is wrapped in `MaybeUninit` as arbitrary bytes are read in, and not all types can be an arbitrary bit pattern.
 /// Further, not all items may be written to and you may not want to initialise the whole buffer.
+#[derive(Debug)]
 #[repr(C, align(8))]
 struct AncillaryData<T, const N: usize>([std::mem::MaybeUninit<T>; N]);
+#[derive(Debug)]
 #[repr(C)]
 pub struct Ancillary<T, const N: usize> {
-    len: usize,
+    pub(crate) len: usize,
     level: Level,
     ty: AncillaryType,
     data: AncillaryData<T, N>
@@ -119,10 +121,33 @@ pub struct Ancillary<T, const N: usize> {
 impl<T: Copy, const N: usize> Ancillary<T, N> {
     pub fn new() -> Self {
         Self {
-            len: 0,
+            len: std::mem::size_of::<Ancillary<T, 0>>(),
             level: Level::UNSPECIFIED,
             ty: AncillaryType::NONE,
             data: AncillaryData([std::mem::MaybeUninit::uninit(); N])
+        }
+    }
+    pub fn with_data(data: &[T], ty: AncillaryType, level: Level) -> Self {
+        let mut ancillary = AncillaryData([std::mem::MaybeUninit::uninit(); N]);
+        for (i, &data) in data.iter().enumerate() {
+            ancillary.0[i].write(data);
+        }
+        let header_len = std::mem::size_of::<Ancillary<T, 0>>();
+        let item_len = (std::mem::size_of::<std::mem::MaybeUninit<T>>() - header_len) / N;
+        Self {
+            len: header_len + (item_len * data.len()),
+            level,
+            ty,
+            data: ancillary
+        }
+    }
+    pub fn add_item(&mut self, item: T) -> Option<T> {
+        if self.len == std::mem::size_of::<std::mem::MaybeUninit<T>>() {
+            Some(item)
+        } else {
+            self.data.0[(self.len - std::mem::size_of::<Ancillary<T, 0>>()) / std::mem::size_of::<std::mem::MaybeUninit<T>>()].write(item);
+            self.len += (std::mem::size_of::<std::mem::MaybeUninit<T>>() - std::mem::size_of::<Ancillary<T, 0>>()) / N;
+            None
         }
     }
     /// Get the items from the ancillary data. All items are initialised, but contain an arbitrary bit pattern the may not be

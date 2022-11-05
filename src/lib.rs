@@ -185,7 +185,7 @@ macro_rules! enumeration {
                     $(
                         Self::$item => ::core::write!(f, "{}({})", ::core::stringify!($item), $value),
                     )*
-                    e => ::core::write!(f, "UNKNOWN({})", e)
+                    e => ::core::write!(f, "UNKNOWN({})", e.0)
                 }
             }
         }
@@ -196,7 +196,7 @@ macro_rules! enumeration {
                     $(
                         Self::$item => f.write_str($display),
                     )*
-                    _ => f.write_str("Unknown error.")
+                    _ => f.write_str("Unknown enumeration value.")
                 }
             }
         }

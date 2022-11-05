@@ -1,4 +1,4 @@
-use core::{arch::asm, marker::PhantomData};
+use core::{arch::asm, marker::PhantomData, fmt::Debug};
 use crate::{enumeration, sock::{self, Ancillary}};
 
 pub mod epoll;
@@ -434,6 +434,11 @@ impl Fd<'static> {
     #[allow(non_upper_case_globals)]
     pub const stderr: &'static Self = &Self(2, PhantomData);
 }
+impl<'a, 'b> AsRef<Fd<'b>> for Fd<'b> {
+    fn as_ref(&self) -> &Fd<'b> {
+        self
+    }
+}
 impl<'a> FileDescriptor for Fd<'a> {
     #[inline(always)]
     fn raw(&self) -> u32 {
@@ -471,6 +476,14 @@ impl TryFrom<isize> for File {
         } else {
             Ok(Self(maybe as u32))
         }
+    }
+}
+impl Debug for File {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("File")
+            .field("fd", &self.0)
+            .field("path", &"todo!()")
+            .finish()
     }
 }
 impl FileDescriptor for File {
@@ -531,14 +544,14 @@ impl Drop for Socket {
 #[derive(Debug)]
 #[repr(C)]
 pub struct IoVec<'a> {
-    buffer: *const u8,
+    pub buffer: *const u8,
     buffer_len: usize,
     _marker: core::marker::PhantomData<&'a [u8]>
 }
 impl<'a> IoVec<'a> {
     /// Construct a new `IoVec` from a slice.
     #[inline(always)]
-    pub fn new(buffer: &[u8]) -> Self {
+    pub fn new(buffer: &'a [u8]) -> Self {
         Self {
             buffer: buffer.as_ptr(),
             buffer_len: buffer.len(),
@@ -612,27 +625,27 @@ impl<'a> From<&'a mut [u8]> for IoVecMut<'a> {
 /// `buffer` must be readable and writable for `buffer_len` bytes.
 /// The lifetime assigned to the returned slice must not exceed that of buffer.
 #[inline]
-pub unsafe fn read_uninit<'a, F: FileDescriptor>(fd: &F, buffer: *mut u8, buffer_len: usize) -> Result<&'a [u8], Error> {
+pub unsafe fn read_uninit<'a, 'b, F: AsRef<Fd<'b>>>(fd: F, buffer: *mut u8, buffer_len: usize) -> Result<&'a [u8], Error> {
     let count;
     syscall!{
-        0x00(fd.raw(), buffer, buffer_len) -> count 
+        0x00(fd.as_ref().raw(), buffer, buffer_len) -> count 
     }
     Error::maybe_usize(count).map(|len| std::slice::from_raw_parts(buffer, len))
 }
 /// Read in the next available bytes from a file.
 /// The buffer may not be filled, extra bytes are left unmodified.
 #[inline]
-pub fn read<'a, F: FileDescriptor>(fd: &F, buffer: &'a mut [u8]) -> Result<&'a [u8], Error> {
-    unsafe { read_uninit(fd, buffer.as_mut_ptr(), buffer.len()) }
+pub fn read<'a, 'b, F: AsRef<Fd<'b>>>(fd: F, buffer: &'a mut [u8]) -> Result<&'a [u8], Error> {
+    unsafe { read_uninit(fd.as_ref(), buffer.as_mut_ptr(), buffer.len()) }
 }
 /// Write a slice of bytes to a file.
 /// The number of bytes successfully written is returned.
 #[inline]
-pub fn write<'a, F: FileDescriptor>(fd: &F, buffer: &[u8]) -> Result<usize, Error> {
+pub fn write<'a, 'b, F: AsRef<Fd<'b>>>(fd: F, buffer: &[u8]) -> Result<usize, Error> {
     let count;
     unsafe {
         syscall!{
-            0x01(fd.raw(), buffer.as_ptr(), buffer.len()) -> count 
+            0x01(fd.as_ref().raw(), buffer.as_ptr(), buffer.len()) -> count 
         }
     }
     Error::maybe_usize(count)
@@ -655,21 +668,20 @@ pub mod open {
     #[derive(Clone, Copy, PartialEq, Eq)]
     #[repr(transparent)]
     pub struct Mode(pub u32);
-    #[allow(non_upper_case_globals)]
     impl Mode {
-        pub const None: Self = Self(0);
-        pub const User: Self = Self(0o700);
-        pub const Group: Self = Self(0o070);
-        pub const Other: Self = Self(0o007);
-        pub const Read: Self = Self(0b100);
-        pub const Write: Self = Self(0b010);
-        pub const Exec: Self = Self(0b001);
-        pub const Setuid: Self = Self(0o4000);
-        pub const Setgid: Self = Self(0o2000);
-        pub const Restricted: Self = Self(0o1000);
+        pub const NONE: Self = Self(0);
+        pub const USER: Self = Self(0o700);
+        pub const GROUP: Self = Self(0o070);
+        pub const OTHER: Self = Self(0o007);
+        pub const READ: Self = Self(0b100);
+        pub const WRITE: Self = Self(0b010);
+        pub const EXEC: Self = Self(0b001);
+        pub const SETUID: Self = Self(0o4000);
+        pub const SETGID: Self = Self(0o2000);
+        pub const RESTRICTED: Self = Self(0o1000);
         /// Returns true if any of the bits are set
         pub fn any(self, bits: Self) -> bool {
-            self & bits != Self::None
+            self & bits != Self::NONE
         }
         /// Returns true if all of the bits are set
         pub fn all(self, bits: Self) -> bool {
@@ -742,10 +754,10 @@ pub mod open {
                     #[derive(Debug)]
                     struct Exec;
                     let mut debug = f.debug_tuple(self.0);
-                    if self.1.any(Mode::Read) { debug.field(&Read); }
-                    if self.1.any(Mode::Write) { debug.field(&Write); }
-                    if self.1.any(Mode::Exec) { debug.field(&Exec); }
-                    if !self.1.any(Mode::Other) { debug.field(&None); }
+                    if self.1.any(Mode::READ) { debug.field(&Read); }
+                    if self.1.any(Mode::WRITE) { debug.field(&Write); }
+                    if self.1.any(Mode::EXEC) { debug.field(&Exec); }
+                    if !self.1.any(Mode::OTHER) { debug.field(&None); }
                     debug.finish()
                 }
             }
@@ -756,12 +768,12 @@ pub mod open {
             #[derive(Debug)]
             struct Restricted;
             let mut debug = f.debug_tuple("Mode");
-            if self.any(Self::Setuid) { debug.field(&Setuid); }
-            if self.any(Self::Setgid) { debug.field(&Setgid); }
-            if self.any(Self::Restricted) { debug.field(&Restricted); }
-            debug.field(&Domain("User", (*self & Self::User) >> 6))
-                .field(&Domain("Group", (*self & Self::Group) >> 3))
-                .field(&Domain("Other", *self & Self::Other));
+            if self.any(Self::SETUID) { debug.field(&Setuid); }
+            if self.any(Self::SETGID) { debug.field(&Setgid); }
+            if self.any(Self::RESTRICTED) { debug.field(&Restricted); }
+            debug.field(&Domain("User", (*self & Self::USER) >> 6))
+                .field(&Domain("Group", (*self & Self::GROUP) >> 3))
+                .field(&Domain("Other", *self & Self::OTHER));
             debug.finish()
         }
     }
@@ -787,11 +799,11 @@ pub fn open<P: AsRef<std::path::Path>>(path: P, flags: open::Flags, mode: open::
 }
 
 #[inline]
-pub fn close<F: FileDescriptor>(fd: &F) -> Result<(), Error> {
+pub fn close<'a, F: AsRef<Fd<'a>>>(fd: F) -> Result<(), Error> {
     let err;
     unsafe {
         syscall!{
-            0x03(fd.raw()) -> err
+            0x03(fd.as_ref().raw()) -> err
         }
     }
     Error::maybe(err)
@@ -817,12 +829,12 @@ pub fn stat<P: AsRef<std::path::Path>>(path: P) -> Result<Stat, Error> {
     unsafe { stat_unsafe(path.as_ptr() as *const u8) }
 }
 #[inline]
-pub fn fstat<F: FileDescriptor>(fd: &F) -> Result<Stat, Error> {
+pub fn fstat<'a, F: AsRef<Fd<'a>>>(fd: F) -> Result<Stat, Error> {
     let mut stat = core::mem::MaybeUninit::uninit();
     let err;
     unsafe {
         syscall!{
-            5(fd.raw(), stat.as_mut_ptr()) -> err
+            5(fd.as_ref().raw(), stat.as_mut_ptr()) -> err
         }
         Error::maybe(err).map(|_| stat.assume_init())
     }
@@ -896,10 +908,10 @@ pub unsafe fn munmap(address: *mut core::ffi::c_void, length: usize) -> Result<(
 /// - `arg` must be appropriate for the given command and device of the file descriptor.
 /// - `*mut T` must be a thin pointer.
 #[inline]
-pub unsafe fn ioctl<T, F: FileDescriptor>(fd: &F, cmd: u32, arg: *mut T) -> Result<(), Error> {
+pub unsafe fn ioctl<'a, T, F: AsRef<Fd<'a>>>(fd: F, cmd: u32, arg: *mut T) -> Result<(), Error> {
     let err;
     syscall!{
-        16(fd.raw(), cmd, arg) -> err
+        16(fd.as_ref().raw(), cmd, arg) -> err
     }
     Error::maybe(err)
 }
@@ -907,12 +919,12 @@ pub unsafe fn ioctl<T, F: FileDescriptor>(fd: &F, cmd: u32, arg: *mut T) -> Resu
 /// Vectorized read. The same operation as read but specifying a set of destination buffers.
 /// The buffers may be uninitialised.
 #[inline]
-pub fn readv<F: FileDescriptor>(fd: &F, iov: &[IoVec]) -> Result<usize, Error> {
+pub fn readv<'a, F: AsRef<Fd<'a>>>(fd: F, iov: &[IoVec]) -> Result<usize, Error> {
     // Safety: IoVec can only be constructed with potentially invalid values through an unsafe function.
     let count;
     unsafe {
         syscall!{
-            19(fd.raw(), iov.as_ptr(), iov.len()) -> count
+            19(fd.as_ref().raw(), iov.as_ptr(), iov.len()) -> count
         }
     }
     Error::maybe_usize(count)
@@ -934,29 +946,29 @@ pub fn socket(domain: sock::Domain, ty: sock::Type, protocol: sock::Protocol) ->
 }
 /// Initiate a connection on a socket.
 #[inline]
-pub fn connect<F: FileDescriptor>(socket: &F, address: sock::Address) -> Result<(), Error> {
+pub fn connect<'a, F: AsRef<Fd<'a>>>(socket: F, address: sock::Address) -> Result<(), Error> {
     let error;
     unsafe {
         syscall!{
-            42(socket.raw(), address.0.as_ptr(), address.0.len()) -> error
+            42(socket.as_ref().raw(), address.0.as_ptr(), address.0.len()) -> error
         }
     }
     Error::maybe(error)
 }
 /// Accept a connection on a socket.
 #[inline]
-pub fn accept<F: FileDescriptor>(socket: &F) -> Result<Socket, Error> {
+pub fn accept<'a, F: AsRef<Fd<'a>>>(socket: F) -> Result<Socket, Error> {
     let fd: isize;
     unsafe {
         syscall!{
-            43(socket.raw(), core::ptr::null_mut::<u8>(), core::ptr::null_mut::<u32>()) -> fd
+            43(socket.as_ref().raw(), core::ptr::null_mut::<u8>(), core::ptr::null_mut::<u32>()) -> fd
         }
     }
     fd.try_into()
 }
 
 /// Send a message to a socket.
-pub fn sendmsg<T, const N: usize, F: FileDescriptor>(socket: &F, iov: &[IoVec], ancillary: Option<&Ancillary<T, N>>, flags: sock::Flags) -> Result<usize, Error> {
+pub fn sendmsg<'a, T, const N: usize, F: AsRef<Fd<'a>>>(socket: F, iov: &[IoVec], ancillary: Option<&Ancillary<T, N>>, flags: sock::Flags) -> Result<usize, Error> {
     #[repr(C)]
     struct MessageHeader<'a, T, const N: usize> {
         address: *const u8,
@@ -973,16 +985,16 @@ pub fn sendmsg<T, const N: usize, F: FileDescriptor>(socket: &F, iov: &[IoVec], 
         address_len: 0,
         iov: iov.as_ptr(),
         iov_len: iov.len(),
-        ancillary_len: if ancillary.is_none() { 0 } else { std::mem::size_of::<Ancillary<T, N>>() },
+        ancillary_len: if let Some(ancillary) = ancillary { ancillary.len } else { 0 },
         ancillary: ancillary.map(|a| a as *const _).unwrap_or(std::ptr::null()),
         flags: 0
     };
-    // Safety: IoVec can only be constructed with potentially invalid values through an unsafe function.
     let count;
     let flags: u32 = flags.into();
+    // Safety: IoVec can only be constructed with potentially invalid values through an unsafe function.
     unsafe {
         syscall!{
-            46(socket.raw(), &msg, flags) -> count
+            46(socket.as_ref().raw(), &msg, flags) -> count
         }
     }
     Error::maybe_usize(count)
@@ -990,7 +1002,7 @@ pub fn sendmsg<T, const N: usize, F: FileDescriptor>(socket: &F, iov: &[IoVec], 
 /// Recieve a message from a socket.
 /// 
 /// `flags` is written with the message return flags.
-pub fn recvmsg<T, const N: usize, F: FileDescriptor>(socket: &F, iov: &[IoVecMut], ancillary: Option<&mut Ancillary<T, N>>, flags: sock::Flags) -> Result<usize, Error> {
+pub fn recvmsg<'a, T, const N: usize, F: AsRef<Fd<'a>>>(socket: F, iov: &[IoVecMut], ancillary: Option<&mut Ancillary<T, N>>, flags: sock::Flags) -> Result<usize, Error> {
     #[repr(C)]
     struct MessageHeader<'a, T, const N: usize> {
         address: *mut u8,
@@ -1016,7 +1028,7 @@ pub fn recvmsg<T, const N: usize, F: FileDescriptor>(socket: &F, iov: &[IoVecMut
     let flags: u32 = flags.into();
     unsafe {
         syscall!{
-            47(socket.raw(), &mut msg, flags) -> count
+            47(socket.as_ref().raw(), &mut msg, flags) -> count
         }
     }
     Error::maybe_usize(count)
@@ -1024,11 +1036,11 @@ pub fn recvmsg<T, const N: usize, F: FileDescriptor>(socket: &F, iov: &[IoVecMut
 
 /// Bind a name to a socket.
 #[inline]
-pub fn bind<F: FileDescriptor>(socket: &F, address: sock::Address) -> Result<(), Error> {
+pub fn bind<'a, F: AsRef<Fd<'a>>>(socket: F, address: sock::Address) -> Result<(), Error> {
     let maybe: isize;
     unsafe {
         syscall!{
-            49(socket.raw(), address.0.as_ptr(), address.0.len()) -> maybe
+            49(socket.as_ref().raw(), address.0.as_ptr(), address.0.len()) -> maybe
         }
     }
     Error::maybe(maybe)
@@ -1036,11 +1048,11 @@ pub fn bind<F: FileDescriptor>(socket: &F, address: sock::Address) -> Result<(),
 
 /// Listen for connections on a socket.
 #[inline]
-pub fn listen<F: FileDescriptor>(socket: &F, backlog: u32) -> Result<(), Error> {
+pub fn listen<'a, F: AsRef<Fd<'a>>>(socket: F, backlog: u32) -> Result<(), Error> {
     let maybe: isize;
     unsafe {
         syscall!{
-            50(socket.raw(), backlog) -> maybe
+            50(socket.as_ref().raw(), backlog) -> maybe
         }
     }
     Error::maybe(maybe)
@@ -1067,16 +1079,16 @@ pub fn exit(code: i32) -> ! {
 /// - `arg` must be appropriate for the given command and device of the file descriptor.
 /// - `*mut T` must be a thin pointer.
 #[inline]
-pub fn fcntl<F: FileDescriptor>(fd: &F, cmd: Fcntl) -> Result<u32, Error> {
+pub fn fcntl<'a, F: AsRef<Fd<'a>>>(fd: F, cmd: Fcntl) -> Result<u32, Error> {
     let maybe;
     unsafe {
         if let Some(arg) = cmd.arg() {
             syscall!{
-                72(fd.raw(), cmd.cmd(), arg) -> maybe
+                72(fd.as_ref().raw(), cmd.cmd(), arg) -> maybe
             }
         } else {
             syscall!{
-                72(fd.raw(), cmd.cmd()) -> maybe
+                72(fd.as_ref().raw(), cmd.cmd()) -> maybe
             }
         }
     }
@@ -1106,22 +1118,22 @@ pub fn unlink<P: AsRef<std::path::Path>>(path: P) -> Result<(), Error> {
 
 /// Wait for an entry to enter the epoll ready list.
 #[inline]
-pub fn epoll_wait<'a, E: FileDescriptor>(epoll: &E, events: &'a mut [std::mem::MaybeUninit<epoll::Event>], timeout: u32) -> Result<&'a [epoll::Event], Error> {
+pub fn epoll_wait<'a, 'b, E: AsRef<Fd<'b>>>(epoll: E, events: &'a mut [std::mem::MaybeUninit<epoll::Event>], timeout: u32) -> Result<&'a [epoll::Event], Error> {
     let maybe: isize;
     unsafe {
         syscall!{
-            232(epoll.raw(), events.as_mut_ptr(), events.len(), timeout) -> maybe
+            232(epoll.as_ref().raw(), events.as_mut_ptr(), events.len(), timeout) -> maybe
         }
     }
     Error::maybe_u32(maybe).map(|count| unsafe { std::mem::transmute(&events[..count as usize]) })
 }
 /// Modify an entry in the epoll wait list.
 #[inline]
-pub fn epoll_ctl<E: FileDescriptor, F: FileDescriptor>(epoll: &E, fd: &F, cmd: epoll::Cntl) -> Result<(), Error> {
+pub fn epoll_ctl<'a, 'b, E: AsRef<Fd<'a>>, F: AsRef<Fd<'b>>>(epoll: E, fd: F, cmd: epoll::Cntl) -> Result<(), Error> {
     let maybe: isize;
     unsafe {
         syscall!{
-            233(epoll.raw(), cmd.cmd(), fd.raw(), cmd.arg().map(|p| p as *const epoll::Event).unwrap_or(core::ptr::null())) -> maybe
+            233(epoll.as_ref().raw(), cmd.cmd(), fd.as_ref().raw(), cmd.arg().map(|p| p as *const epoll::Event).unwrap_or(core::ptr::null())) -> maybe
         }
     }
     Error::maybe(maybe)

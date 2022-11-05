@@ -1,9 +1,10 @@
 [package]
 name = "syslib"
 version = "0.0.0"
+description = "Use the Linux ABI on Rust, without C."
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+readme = "readme.md"
+repository = "https://github.com/AidoP/syslib"
 
 [[example]]
 name = "hello_world"
