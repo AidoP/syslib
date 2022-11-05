@@ -3,6 +3,7 @@ name = "syslib"
 version = "0.0.0"
 description = "Use the Linux ABI on Rust, without C."
 edition = "2021"
+license = "MIT"
 readme = "readme.md"
 repository = "https://github.com/AidoP/syslib"
 
@@ -14,4 +15,4 @@ default = ["std"]
 std = []
 
 [dependencies]
-syslib-macro = { path = "syslib-macro" }
+syslib-macro = "0.0.0"
