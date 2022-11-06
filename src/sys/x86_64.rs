@@ -6,6 +6,8 @@ pub mod epoll;
 mod fcntl;
 pub use fcntl::Fcntl;
 
+pub mod mmap;
+
 mod stat;
 pub use stat::{Device, Stat};
 
@@ -866,11 +868,13 @@ pub fn lstat<P: AsRef<std::path::Path>>(path: P) -> Result<Stat, Error> {
 /// Though creating a memory mapping can be considered safe, use of the memory mapping is likely quite unsafe.
 /// Extra care must be taken when using a shared memory mapping.
 #[inline]
-pub fn mmap(address: usize, length: usize, protection: usize, flags: usize, fd: Fd, offset: usize) -> Result<*mut core::ffi::c_void, Error> {
+pub fn mmap<'a, F: AsRef<Fd<'a>>>(address: usize, length: usize, protection: mmap::Protection, flags: mmap::Flags, fd: F, offset: usize) -> Result<*mut core::ffi::c_void, Error> {
     let ptr;
+    let flags: u32 = flags.into();
+    let protection: u32 = protection.into();
     unsafe {
         syscall!{
-            9(address, length, protection, flags, fd.raw(), offset) -> ptr
+            9(address, length, protection, flags, fd.as_ref().raw(), offset) -> ptr
         }
     }
     Error::maybe_ptr(ptr)
@@ -928,6 +932,20 @@ pub fn readv<'a, F: AsRef<Fd<'a>>>(fd: F, iov: &[IoVec]) -> Result<usize, Error>
         }
     }
     Error::maybe_usize(count)
+}
+
+/// Remap an existing memory mapping.
+/// 
+/// # Safety
+/// Remapping memory that is in use or is pointed to by a reference is undefined behaviour if `MAY_MOVE` is specified or if the mapping is shrunk.
+#[inline]
+pub unsafe fn mremap(old_address: *mut core::ffi::c_void, old_size: usize, new_size: usize, flags: mmap::RemapFlags) -> Result<*mut core::ffi::c_void, Error> {
+    let maybe;
+    let flags: u32 = flags.into();
+    syscall!{
+        25(old_address, old_size, new_size, flags) -> maybe
+    }
+    Error::maybe_ptr(maybe)
 }
 
 /// Create a socket file descriptor.
